@@ -37,42 +37,26 @@ public:
 	};
 };
 
-enum class CommunicationStatus {
-	Aproved,
-	Denied,
-	Waiting
-
-};
-
-class SharedData {
-public:
-	boost::interprocess::interprocess_mutex communicationStatusMutex;
-	CommunicationStatus communicationStatus = CommunicationStatus::Waiting;
-	Request rq;
-	SharedData() : rq("") {};
-};
-
-const std::string_view shared_memory_name = "InstanceManagmmentCXXsCCssXsxxssasXsXXXXX";
-const std::string_view mutex_name = "InstanceMutexCXCXssXXXsCsasxxssXXX";
-boost::interprocess::interprocess_condition communicationStatusCondition;
+const std::string_view shared_memory_name = "InstanceManagmment";
+const std::string_view mutex_name = "InstanceMutex";
 
 void doInstanceCommunication(std::function<void()> running, std::function<void()> notRunning) {
-	// Crie ou abra o objeto de memÛria compartilhada
+	// Crie ou abra o objeto de mem√≥ria compartilhada
 	boost::interprocess::shared_memory_object shared_memory(boost::interprocess::open_or_create, shared_memory_name.data(), boost::interprocess::read_write);
 
-	// Defina o tamanho da regi„o de memÛria compartilhada
+	// Defina o tamanho da regi√£o de mem√≥ria compartilhada
 	shared_memory.truncate(sizeof(bool));
 
-	// Mapeie a regi„o de memÛria compartilhada
+	// Mapeie a regi√£o de mem√≥ria compartilhada
 	boost::interprocess::mapped_region region(shared_memory, boost::interprocess::read_write);
 
-	// Verifique se outra inst‚ncia da aplicaÁ„o est· em execuÁ„o e tente bloquear o mutex
+	// Verifique se outra inst√¢ncia da aplica√ß√£o est√° em execu√ß√£o e tente bloquear o mutex
 	bool* is_running = static_cast<bool*>(region.get_address());
 	boost::interprocess::named_mutex mutex(boost::interprocess::open_or_create, mutex_name.data());
 
 	if (*is_running || !mutex.try_lock())
 	{
-		std::cout << "Outra inst‚ncia da aplicaÁ„o j· est· em execuÁ„o." << std::endl;
+		std::cout << "Outra inst√¢ncia da aplica√ß√£o j√° est√° em execu√ß√£o." << std::endl;
 
 		notRunning();
 
@@ -80,12 +64,12 @@ void doInstanceCommunication(std::function<void()> running, std::function<void()
 
 	}
 	else {
-		// O bloqueio do mutex foi bem-sucedido, execute a lÛgica da sua aplicaÁ„o aqui
-		std::cout << "AplicaÁ„o est· sendo executada" << std::endl;
+		// O bloqueio do mutex foi bem-sucedido, execute a l√≥gica da sua aplica√ß√£o aqui
+		std::cout << "Aplica√ß√£o est√° sendo executada" << std::endl;
 
 		running();
 
-		// ApÛs concluir o processamento, desbloqueie o mutex e marque o objeto de memÛria compartilhada
+		// Ap√≥s concluir o processamento, desbloqueie o mutex e marque o objeto de mem√≥ria compartilhada
 		mutex.unlock();
 		*is_running = false;
 	}
@@ -103,12 +87,13 @@ std::string read() {
 
 		semaphore->wait();
 
-		std::cout << "Mensagem compartilhada: " << *shared_message << std::endl;
+		std::cout << "Mensagem recebida: " << *shared_message << std::endl;
 
 		return *shared_message;
 	}
 	catch (const std::exception& ex)
 	{
+		boost::interprocess::shared_memory_object::remove(shared_memory_name.data());
 	}
 
 	return msg;
@@ -138,65 +123,42 @@ bool write(const std::string_view msg) {
 	}
 }
 
-void setStatus(SharedData* sharedData, CommunicationStatus newStatus) {
-	boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(sharedData->communicationStatusMutex);
-	sharedData->communicationStatus = newStatus;
-	communicationStatusCondition.notify_all();
-	std::cout << "Notified" << std::endl;
-}
-
-void waitForActiveStatus(SharedData* sharedData) {
-	boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(sharedData->communicationStatusMutex);
-	while (sharedData->communicationStatus == CommunicationStatus::Waiting) {
-		std::cout << "Locked" << std::endl;
-		communicationStatusCondition.wait(lock);
-	}
-}
-
 int main()
 {
-	// Create or open the shared memory
-	boost::interprocess::shared_memory_object sharedMemory(boost::interprocess::open_or_create, "shared_memory", boost::interprocess::read_write);
-	sharedMemory.truncate(sizeof(SharedData));
-
-	// Map the shared memory region
-	boost::interprocess::mapped_region region(sharedMemory, boost::interprocess::read_write);
-	SharedData* sharedData = new (region.get_address()) SharedData();
-
 	std::function<void()> reader = [&]() {
+		std::cout << "Aberto para conex√µes..." << std::endl;
 		bool systemAvailable = true;
 
 		std::string msg;
 		for (; msg.empty(); msg = read()) std::this_thread::sleep_until(std::chrono::system_clock::now() + std::chrono::seconds(1));
 
-		if (msg.compare("isAvailable") == 0 && systemAvailable)
-			setStatus(sharedData, CommunicationStatus::Aproved);
+		std::string result;
+		if (msg.compare("readModel") == 0 && systemAvailable)
+			result = "Lendo modelo";
 		else
-			setStatus(sharedData, CommunicationStatus::Denied);
+			result = "Comando negado";
 
-		for (msg = ""; msg.empty(); msg = read()) std::this_thread::sleep_until(std::chrono::system_clock::now() + std::chrono::seconds(1));
+		std::cout << result << std::endl;
 
-		if (msg.compare("readModel") == 0)
-			std::cout << "Lendo modelo" << std::endl;
-		else
-			std::cout << "Comando n„o consecido. Fim da execuÁ„o." << std::endl;
+		while (!write(result));
+
+		std::cout << "Fim" << std::endl;
 		std::this_thread::sleep_until(std::chrono::system_clock::now() + std::chrono::seconds(10));
 	};
 
 	std::function<void()> writer = [&]() {
-		std::cout << "Estabelecendo conex„o..." << std::endl;
+		std::cout << "Estabelecendo conex√£o..." << std::endl;
 
-		while (!write("isAvailable"));
+		std::string msg("readModel");
+		while (!write(msg));
 
-		std::cout << "Estabelecendo conex„o..." << std::endl;
+		std::cout << "Mensagem enviada: \"" << msg << "\"" << std::endl;
 
-		waitForActiveStatus(sharedData);
+		std::this_thread::sleep_until(std::chrono::system_clock::now() + std::chrono::seconds(1));
 
-		std::cout << "Conex„o estabelecida" << std::endl;
+		for (msg = ""; msg.empty(); msg = read()) std::this_thread::sleep_until(std::chrono::system_clock::now() + std::chrono::seconds(1));
 
-		while (!write("readModel"));
-
-		std::cout << "Comando enviado..." << std::endl;
+		std::cout << "Fim" << std::endl;
 		std::this_thread::sleep_until(std::chrono::system_clock::now() + std::chrono::seconds(10));
 	};
 
