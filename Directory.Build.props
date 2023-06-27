@@ -1,0 +1,3 @@
+<Project>
+ <Import Project="C:\Desenvolvimento\vcpkg\scripts\buildsystems\msbuild\vcpkg.props" />
+</Project>
