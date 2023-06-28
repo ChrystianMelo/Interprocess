@@ -16,27 +16,6 @@
 
 #include <mutex>
 
-class Request {
-private:
-	std::string m_command;
-public:
-	Request(const std::string& command) : m_command(command) {};
-	virtual void processCommand() {};
-};
-
-class OpenModelRequest : Request {
-private:
-	const std::string commandPrefix = "openModel_";
-	std::filesystem::path m_path;
-public:
-	OpenModelRequest(const std::filesystem::path& path) : Request(commandPrefix + path.string()), m_path(path) {};
-
-	void processCommand() override {
-		//..
-		std::cout << "The model \"" << "\" was open successfully." << std::endl;
-	};
-};
-
 const std::string_view shared_memory_name = "InstanceManagmment";
 const std::string_view mutex_name = "InstanceMutex";
 
