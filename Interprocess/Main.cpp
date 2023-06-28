@@ -18,12 +18,12 @@
 /**
  * @brief Nome da memória compartilhada utilizada para comunicação entre instâncias.
  */
-const std::string_view shared_memory_name = "InstanceManagement11";
+const std::string_view shared_memory_name = "InstanceManagement12";
 
 /**
  * @brief Nome do mutex utilizado para controlar o acesso à memória compartilhada.
  */
-const std::string_view mutex_name = "InstanceMutex11";
+const std::string_view mutex_name = "InstanceMutex12";
 
 /**
  * @brief Tamanho máximo da mensagem a ser armazenada na memória compartilhada.
@@ -89,7 +89,7 @@ void coordinateInstanceCommunication(std::function<void()> mainInstance, std::fu
 
 	if (*is_mainInstance || !mutex.try_lock())
 	{
-		std::cout << "Outra instância da aplicação já está em execução." << std::endl;
+		std::cout << "Main instance." << std::endl;
 
 		secundaryInstance();
 
@@ -97,7 +97,7 @@ void coordinateInstanceCommunication(std::function<void()> mainInstance, std::fu
 	}
 	else {
 		// O bloqueio do mutex foi bem-sucedido, execute a lógica da sua aplicação aqui
-		std::cout << "Aplicação está sendo executada" << std::endl;
+		std::cout << "Secundary instance" << std::endl;
 
 		mainInstance();
 
@@ -161,7 +161,7 @@ int main()
 				{
 					boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(data->mutex);
 
-					strcpy(data->items, "The model is being open.");
+					strcpy(data->items, "The file is being open.");
 
 					std::cout << "[out]" << data->items << std::endl;
 
@@ -203,7 +203,7 @@ int main()
 				{
 					boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(data->mutex);
 
-					strcpy(data->items, "read_moedel: something.egomlx");
+					strcpy(data->items, "read: something.txt");
 
 					std::cout << "[out]" << data->items << std::endl;
 
