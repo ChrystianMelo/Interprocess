@@ -1,3 +1,0 @@
-﻿C:\Users\Chrystian Melo\Desktop\dinamica\Interprocess\packages\vcpkg.C.Desenvolvimento.vcpkg.1.0.0\build\native\vcpkg.C.Desenvolvimento.vcpkg.targets(3,3): warning MSB4011: não é possível importar "C:\Desenvolvimento\vcpkg\scripts\buildsystems\msbuild\vcpkg.targets" novamente. Esse item já foi importado em "C:\Users\Chrystian Melo\Desktop\dinamica\Interprocess\Directory.Build.targets (2,2)". É provável que esse seja um erro de criação do build. Essa importação subsequente será ignorada. [C:\Users\Chrystian Melo\Desktop\dinamica\Interprocess\Interprocess\Interprocess.vcxproj]
-  Main.cpp
-  Interprocess.vcxproj -> C:\Users\Chrystian Melo\Desktop\dinamica\Interprocess\x64\Debug\Interprocess.exe
