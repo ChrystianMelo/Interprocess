@@ -1,4 +1,5 @@
 #include "CommunicationUtils.h"
+#include <chrono>
 
 SharedData::SharedData()
 	: m_messageIn(false)
@@ -39,127 +40,109 @@ std::string Request::getFullCommand()
 	}
 	return fullCommand;
 }
-void CommunicationUtils::identifyInstances(const std::function<void()> mainInstance, const std::function<void()> secundaryInstance, const std::string_view shared_memory_name, const std::string_view mutex_name) {
-	// Cria ou abre o objeto de memória compartilhada
-	boost::interprocess::shared_memory_object shared_memory(boost::interprocess::open_or_create, shared_memory_name.data(), boost::interprocess::read_write);
 
-	// Define o tamanho da região de memória compartilhada
-	shared_memory.truncate(sizeof(bool));
-
-	// Mapeia a região de memória compartilhada
-	boost::interprocess::mapped_region region(shared_memory, boost::interprocess::read_write);
-
-	// Verifica se outra instância da aplicação está em execução e tenta bloquear o mutex
-	bool* is_mainInstance = static_cast<bool*>(region.get_address());
-	boost::interprocess::named_mutex mutex(boost::interprocess::open_or_create, mutex_name.data());
-
-	if (*is_mainInstance || !mutex.try_lock())
-	{
-		std::cout << "Secundary instance" << std::endl;
-
-		secundaryInstance();
-
-		*is_mainInstance = true;
-	}
-	else {
-		std::cout << "Main instance." << std::endl;
-
-		mainInstance();
-
-		mutex.unlock();
-		*is_mainInstance = false;
-	}
-
-	std::cout << "Finish." << std::endl;
-
-	boost::interprocess::shared_memory_object::remove(shared_memory_name.data());
+IntanceCommunication::IntanceCommunication(const std::string_view mutexName, const std::string_view communicationMemoryName)
+	: m_communicationData(nullptr)
+	, m_cancelled(false)
+	, m_mutex(boost::interprocess::open_or_create, mutexName.data())
+	, m_mutexName(mutexName)
+	, m_communicationMemoryName(communicationMemoryName)
+{
 }
 
-void CommunicationUtils::coordinateCommunication(Request& rq, const std::function<bool(Request& rq)> processRequest, const std::function<void()> taskToDo, const std::string_view shared_memory_name)
+bool IntanceCommunication::stopInstanceCommunication()
 {
-	bool isMainInstanceExecuting = true;
+	boost::interprocess::shared_memory_object::remove(m_communicationMemoryName.data());
+	return true;
+}
+
+void IntanceCommunication::coordinateCommunication(Request& rq, const std::function<bool(Request& rq)> processRequest, const std::function<void()> taskToDo)
+{
+	m_cancelled = false;
 
 	// Gerencia a comunicação entre as instancias
-	CommunicationUtils::identifyInstances(
+	IntanceCommunication::identifyInstances(
 		[&]() {
 			//while (isMainInstanceExecuting) {
 				// Apaga a memória compartilhada anterior e agenda a remoção na saída
-				boost::interprocess::shared_memory_object::remove(shared_memory_name.data());
+			boost::interprocess::shared_memory_object::remove(m_communicationMemoryName.data());
 
-				// Cria um objeto de memória compartilhada
-				boost::interprocess::shared_memory_object object(boost::interprocess::create_only, // somente criação
-					shared_memory_name.data(),                                                     // nome
-					boost::interprocess::read_write // modo leitura-escrita
+			// Cria um objeto de memória compartilhada
+			boost::interprocess::shared_memory_object object(boost::interprocess::create_only, // somente criação
+				m_communicationMemoryName.data(),                                                     // nome
+				boost::interprocess::read_write // modo leitura-escrita
+			);
+
+			try {
+				// Define o tamanho
+				object.truncate(sizeof(SharedData));
+
+				// Mapeia toda a memória compartilhada neste processo
+				boost::interprocess::mapped_region region(object, // o que mapear
+					boost::interprocess::read_write               // mapeia como leitura-escrita
 				);
 
-				try {
-					// Define o tamanho
-					object.truncate(sizeof(SharedData));
+				// Obtém o endereço da região mapeada
+				void* addr = region.get_address();
 
-					// Mapeia toda a memória compartilhada neste processo
-					boost::interprocess::mapped_region region(object, // o que mapear
-						boost::interprocess::read_write               // mapeia como leitura-escrita
-					);
+				// Constrói a estrutura compartilhada na memória
+				m_communicationData = new (addr) SharedData;
 
-					// Obtém o endereço da região mapeada
-					void* addr = region.get_address();
+				std::cout << "[waiting connection]" << std::endl;
 
-					// Constrói a estrutura compartilhada na memória
-					SharedData* data = new (addr) SharedData;
+				std::string command = "";
 
-					std::cout << "\t[waiting connection]" << std::endl;
+				// Lê a mensagem
+				{
+					boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(m_communicationData->m_mutex);
 
-					std::string command = "";
+					m_communicationData->m_condition.wait(lock);
+					if (m_cancelled) return;
 
-					// Lê a mensagem
-					{
-						boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(data->m_mutex);
-						data->m_condition.wait(lock);
+					// Imprime a mensagem
+					std::cout << "\t[in]" << m_communicationData->m_items << std::endl;
 
-						// Imprime a mensagem
-						std::cout << "\t\t[in]" << data->m_items << std::endl;
+					command = m_communicationData->m_items;
 
-						command = data->m_items;
-
-						// Notifica o outro processo que o buffer está vazio
-						data->m_messageIn = false;
-					}
-
-					// Processa a mensagem 
-					bool isAvailable = processRequest(rq);
-
-					// Responde a mensagem
-					{
-						boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(data->m_mutex);
-
-						if (isAvailable)
-							strcpy(data->m_items, "accepted");
-						else
-							strcpy(data->m_items, "denied");
-
-						std::cout << "\t\t[out]" << data->m_items << std::endl;
-
-						if (isAvailable)
-							taskToDo();
-
-						// Notifica o outro processo que há uma mensagem
-						data->m_condition.notify_one();
-
-						// Marca o buffer de mensagem como cheio
-						data->m_messageIn = true;
-					}
-
-					std::cout << "\t[connection closed]" << std::endl;
+					// Notifica o outro processo que o buffer está vazio
+					m_communicationData->m_messageIn = false;
 				}
-				catch (boost::interprocess::interprocess_exception& ex) {
-					std::cout << ex.what() << std::endl;
+
+				// Processa a mensagem 
+				bool isAvailable = processRequest(rq);
+
+				// Responde a mensagem
+				{
+					boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(m_communicationData->m_mutex);
+
+					if (isAvailable)
+						strcpy(m_communicationData->m_items, "accepted");
+					else
+						strcpy(m_communicationData->m_items, "denied");
+
+					std::cout << "\t[out]" << m_communicationData->m_items << std::endl;
+
+					if (isAvailable)
+						taskToDo();
+
+					// Notifica o outro processo que há uma mensagem
+					m_communicationData->m_condition.notify_one();
+
+					// Marca o buffer de mensagem como cheio
+					m_communicationData->m_messageIn = true;
 				}
+
+				std::cout << "[connection closed]" << std::endl;
+			}
+			catch (boost::interprocess::interprocess_exception& ex) {
+				std::cout << ex.what() << std::endl;
+			}
 			//}
 		},
 		[&]() {
 			// Cria um objeto de memória compartilhada
 			boost::interprocess::shared_memory_object object(boost::interprocess::open_only, // somente abertura
-				shared_memory_name.data(),                                                   // nome
+				m_communicationMemoryName.data(),                                                   // nome
 				boost::interprocess::read_write                                              // modo leitura-escrita
 			);
 
@@ -173,36 +156,38 @@ void CommunicationUtils::coordinateCommunication(Request& rq, const std::functio
 				void* addr = region.get_address();
 
 				// Obtém um ponteiro para a estrutura compartilhada
-				SharedData* data = static_cast<SharedData*>(addr);
+				m_communicationData = static_cast<SharedData*>(addr);
 
 				// Escreve uma mensagem
 				{
-					boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(data->m_mutex);
+					boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(m_communicationData->m_mutex);
 
-					strcpy(data->m_items, rq.getFullCommand().c_str());
+					strcpy(m_communicationData->m_items, rq.getFullCommand().c_str());
 
-					std::cout << "\t[out]" << data->m_items << std::endl;
+					std::cout << "[out]" << m_communicationData->m_items << std::endl;
 
 					// Notifica o outro processo que há uma mensagem
-					data->m_condition.notify_one();
+					m_communicationData->m_condition.notify_one();
 
 					// Marca o buffer de mensagem como cheio
-					data->m_messageIn = true;
+					m_communicationData->m_messageIn = true;
 				}
 
 				// Lê a resposta.
 				{
-					boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(data->m_mutex);
-					data->m_condition.wait(lock);
+					boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(m_communicationData->m_mutex);
+
+					m_communicationData->m_condition.wait(lock);
+					if (m_cancelled) return;
 
 					// Imprime a mensagem
-					std::cout << "\t[in]" << data->m_items << std::endl;
+					std::cout << "[in]" << m_communicationData->m_items << std::endl;
 
 					// Notifica o outro processo que o buffer está vazio
-					data->m_messageIn = false;
+					m_communicationData->m_messageIn = false;
 
 					// Define o status da solicitação.
-					rq.setAccepted(std::strcmp(data->m_items, "accepted") == 0);
+					rq.setAccepted(std::strcmp(m_communicationData->m_items, "accepted") == 0);
 				}
 			}
 			catch (boost::interprocess::interprocess_exception& ex) {
@@ -214,4 +199,29 @@ void CommunicationUtils::coordinateCommunication(Request& rq, const std::functio
 			// Processa a solicitação.
 			rq.processRequest();
 		});
+}
+
+void IntanceCommunication::identifyInstances(const std::function<void()> mainInstance, const std::function<void()> secundaryInstance) {
+	if (m_mutex.try_lock()) {
+		std::cout << "Main instance." << std::endl;
+
+		mainInstance();
+
+		m_mutex.unlock();
+	}
+	else {
+		std::cout << "Secondary instance" << std::endl;
+
+		secundaryInstance();
+	}
+
+	std::cout << "Finish." << std::endl;
+}
+
+bool IntanceCommunication::lockMainIntance(){
+	return m_mutex.try_lock();
+}
+
+void IntanceCommunication::releaseMainInstance() {
+	 m_mutex.unlock();
 }

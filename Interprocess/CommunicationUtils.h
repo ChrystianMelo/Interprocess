@@ -106,8 +106,70 @@ public:
 	std::string getFullCommand();
 };
 
-class CommunicationUtils {
+/**
+ * @brief
+ */
+class IntanceCommunication {
+private:
+	/**
+	 * @brief
+	 */
+	SharedData* m_communicationData;
+
+	/**
+	 * @brief Variável de controle para indicar o cancelamento.
+	 */
+	bool m_cancelled;
+
+	/**
+	 * @brief
+	 */
+	boost::interprocess::named_mutex m_mutex = boost::interprocess::named_mutex(boost::interprocess::open_or_create, m_mutexName.data());
+
+	/**
+	 * @brief
+	 */
+	const std::string_view m_communicationMemoryName;
+
+	/**
+	 * @brief
+	 */
+	const std::string_view m_mutexName;
+
 public:
+
+	/**
+	 * @brief
+	 */
+	IntanceCommunication(const std::string_view mutexName = "InstanceMutex9dsa", const std::string_view communicationMemoryName = "InstanceCommunication9dsa");
+
+	/**
+	 * @brief
+	 */
+	void setCancelled(bool status) { m_cancelled = status; }
+	bool getCancelled() { return m_cancelled; }
+
+	void setSharedData(SharedData* communicationData) { m_communicationData = communicationData; }
+	SharedData* getSharedData() { return m_communicationData; }
+
+	const std::string_view getCommunicationMemoryName() {
+		return m_communicationMemoryName;
+	}
+
+	/**
+	 * @brief
+	 */
+	bool stopInstanceCommunication();
+
+	/**
+	 * @brief Coordena a comunicação entre instâncias de um programa usando memória compartilhada.
+	 *
+	 * @param rq O objeto de requisição a ser processado.
+	 * @param processRequest A função que processa a requisição e retorna um valor booleano.
+	 * @param taskToDo A função a ser executada se a requisição for aceita.
+	 * @param shared_memory_name O nome da memória compartilhada usada para comunicação.
+	 */
+	void coordinateCommunication(Request& rq, const std::function<bool(Request& rq)> processRequest, const std::function<void()> taskToDo);
 
 	/**
 	 * @brief Realiza a comunicação entre as instâncias/processos. Recebe duas funções como parâmetro: mainInstance e secundaryInstance, que serão
@@ -117,19 +179,18 @@ public:
 	 * @param mainInstance Função a ser executada como instância principal.
 	 * @param secundaryInstance Função a ser executada como instancia secundária.
 	 * @param secundaryInstance Nome da memória compartilhada utilizada para comunicação entre instâncias.
-	 * @param shared_memory_name Nome do mutex utilizado para controlar o acesso à memória compartilhada.
 	 */
-	static void identifyInstances(const std::function<void()> mainInstance, const std::function<void()> secundaryInstance, const std::string_view shared_memory_name = "InstanceManagement", const std::string_view mutex_name = "InstanceMutex");
-	
+	void identifyInstances(const std::function<void()> mainInstance, const std::function<void()> secundaryInstance);
+
 	/**
-	 * @brief Coordena a comunicação entre instâncias de um programa usando memória compartilhada.
-	 *
-	 * @param rq O objeto de requisição a ser processado.
-	 * @param processRequest A função que processa a requisição e retorna um valor booleano.
-	 * @param taskToDo A função a ser executada se a requisição for aceita.
-	 * @param shared_memory_name O nome da memória compartilhada usada para comunicação.
+	 * @brief
 	 */
-	static void coordinateCommunication(Request& rq, const std::function<bool(Request& rq)> processRequest, const std::function<void()> taskToDo, const std::string_view shared_memory_name = "InstanceCommunication");
+	bool lockMainIntance();
+
+	/**
+	 * @brief
+	 */
+	void releaseMainInstance();
 };
 
 #endif
