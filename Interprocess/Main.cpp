@@ -2,6 +2,8 @@
 #include <cassert>
 #include <fstream>
 #include <chrono>
+#include <boost/chrono.hpp>
+
 
 #include "CommunicationUtils.h"
 
@@ -23,13 +25,16 @@ void taskToDo(const std::string_view filename) {
 	inputFile.close();
 };
 
-int main()
+int main(int argc, char* argv[])
 {
 	std::string filename("filename.txt");
 
 	IntanceCommunication communication = IntanceCommunication();
 
 	communication.setCancelled(false);
+
+	if (argc > 1) // uma flag que força a criação de uma nova instancia primaria
+		communication.releaseMainInstance();
 
 	if (communication.lockMainIntance()) {
 		//while (isMainInstanceExecuting) {
@@ -54,16 +59,27 @@ int main()
 				boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(communication.getSharedData()->m_mutex);
 				std::cout << "[opening connection]" << std::endl;
 
-				communication.getSharedData()->m_condition.wait(lock);
-				if (communication.getCancelled()) return -1;
+				// Trava uma vez para estabelecer conexão.
+				{
+					communication.getSharedData()->m_condition.wait(lock);
+					if (communication.getCancelled()) return -1;
 
-				// Imprime a mensagem
-				std::cout << "\t[in]" << communication.getSharedData()->m_items << std::endl;
+					communication.getSharedData()->m_isConnected = true;
+				}
 
-				command = communication.getSharedData()->m_items;
+				// Trava uma vez para fazer a comunicação.
+				{
+					communication.getSharedData()->m_condition.wait(lock);
+					if (communication.getCancelled()) return -1;
 
-				// Notifica o outro processo que o buffer está vazio
-				communication.getSharedData()->m_messageIn = false;
+					// Imprime a mensagem
+					std::cout << "\t[in]" << communication.getSharedData()->m_items << std::endl;
+
+					command = communication.getSharedData()->m_items;
+
+					// Notifica o outro processo que o buffer está vazio
+					communication.getSharedData()->m_messageIn = false;
+				}
 			}
 
 			bool isAvailable = false;
@@ -104,8 +120,9 @@ int main()
 		}
 
 		// Apaga a memória compartilhada anterior e agenda a remoção na saída
-		communication.stopInstanceCommunication();
+		communication.setCancelled(true);
 		communication.releaseMainInstance();
+		communication.stopInstanceCommunication();
 		//}
 	}
 	else {
@@ -121,17 +138,34 @@ int main()
 			{
 				boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(communication.getSharedData()->m_mutex);
 
-				std::string command = "ReadFile" + filename;
+				// Verifica se a conexão foi estabelecida com sucesso.
+				{
+					communication.getSharedData()->m_condition.notify_one();
+					communication.getSharedData()->m_condition.wait_for(lock, boost::chrono::milliseconds(500)); // Espera um tempo minimo para o servidor definir a flag connected.
+					if (!communication.getSharedData()->m_isConnected)
+					{
+						std::cout << "Falha na comunicação." << std::endl;
 
-				strcpy(communication.getSharedData()->m_items, command.c_str());
+						communication.setCancelled(true);
+						communication.releaseMainInstance();
+						communication.stopInstanceCommunication();
 
-				std::cout << "[out]" << communication.getSharedData()->m_items << std::endl;
+						return -1;
+					}
+				}
+				// Realiza a comunicação.
+				{
+					std::string command = "ReadFile" + filename;
 
-				// Notifica o outro processo que há uma mensagem
-				communication.getSharedData()->m_condition.notify_one();
+					strcpy(communication.getSharedData()->m_items, command.c_str());
 
-				// Marca o buffer de mensagem como cheio
-				communication.getSharedData()->m_messageIn = true;
+					std::cout << "[out]" << communication.getSharedData()->m_items << std::endl;
+
+					// Notifica o outro processo que há uma mensagem
+					communication.getSharedData()->m_condition.notify_one();
+					// Marca o buffer de mensagem como cheio
+					communication.getSharedData()->m_messageIn = true;
+				}
 			}
 
 			// Lê a resposta.

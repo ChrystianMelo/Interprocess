@@ -3,6 +3,7 @@
 
 SharedData::SharedData()
 	: m_messageIn(false)
+	, m_isConnected(false)
 {}
 
 Request::Request(const std::string_view command, const std::vector<std::string>& args,
@@ -223,5 +224,5 @@ bool IntanceCommunication::lockMainIntance(){
 }
 
 void IntanceCommunication::releaseMainInstance() {
-	 m_mutex.unlock();
+	m_mutex.unlock();
 }

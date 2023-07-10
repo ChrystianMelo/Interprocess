@@ -42,6 +42,11 @@ public:
 	 * @brief Flag indicando se há alguma mensagem presente.
 	 */
 	bool m_messageIn;
+
+	/**
+	 * @brief Flag indicando se a mensagem foi lida.
+	 */
+	bool m_isConnected;
 };
 
 /**
@@ -141,17 +146,31 @@ public:
 	/**
 	 * @brief
 	 */
-	IntanceCommunication(const std::string_view mutexName = "InstanceMutex9dsa", const std::string_view communicationMemoryName = "InstanceCommunication9dsa");
+	IntanceCommunication(const std::string_view mutexName = "InstanceMutex2", const std::string_view communicationMemoryName = "InstanceCommunication2");
 
 	/**
 	 * @brief
 	 */
 	void setCancelled(bool status) { m_cancelled = status; }
+
+	/**
+	 * @brief
+	 */
 	bool getCancelled() { return m_cancelled; }
 
+	/**
+	 * @brief
+	 */
 	void setSharedData(SharedData* communicationData) { m_communicationData = communicationData; }
+
+	/**
+	 * @brief
+	 */
 	SharedData* getSharedData() { return m_communicationData; }
 
+	/**
+	 * @brief
+	 */
 	const std::string_view getCommunicationMemoryName() {
 		return m_communicationMemoryName;
 	}
