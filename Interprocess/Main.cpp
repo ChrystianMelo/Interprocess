@@ -7,13 +7,12 @@
 
 #include "InstanceCommunication.h"
 
-
 /**
- * @brief Mains
+ * @brief Main
  */
 int main(int argc, char* argv[])
 {
-	const ReadFileRequest teste("Teste");
+	const ReadFileRequest teste("Teste.txt");
 
 	std::thread serverThread([&]() {
 		InstanceCommunication server = InstanceCommunication();
@@ -26,6 +25,8 @@ int main(int argc, char* argv[])
 		assert(result);
 
 		assert(server.getRequest() == teste);
+
+		// readFile(server.getRequest().getFilename());
 		});
 
 	std::thread clientThread([&]() {
@@ -36,9 +37,11 @@ int main(int argc, char* argv[])
 
 		const bool result = client.runAsClient(teste);
 		assert(result);
+
 		});
 
 	serverThread.join();
 	clientThread.join();
+
 	return 0;
 }
