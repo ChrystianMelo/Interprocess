@@ -13,39 +13,28 @@ namespace fs = std::filesystem;
 /**
  * @brief Tamanho máximo da mensagem a ser armazenada na memória compartilhada.
  */
-const int MESSAGE_SIZE = 100;
+const int MESSAGE_SIZE = 2048;
 
 /**
- * @brief Operações possiveis para o request.
+ * @brief Classe que representa uma solicitação de leitura de algumn arquivo.
  */
-enum class RequestOperation {
-    NONE, READ_FILE
-};
-
-/**
- * @brief Classe que representa uma solicitação.
- */
-class Request {
-protected:
+class ReadFileRequest {
+private:
     /**
      * @brief Mensagem sendo compartilhada entre as instancias.
      */
-    std::array<char, MESSAGE_SIZE> m_message;
+    std::array<char, MESSAGE_SIZE> m_message = {};
 
-    /**
-     * @brief  Operações possiveis para o request.
-     */
-    RequestOperation m_operation;
 public:
     /**
      * @brief Construtor da classe.
      */
-    Request();
+    ReadFileRequest();
 
     /**
      * @brief Construtor da classe.
      */
-    Request(const std::string_view message, const RequestOperation& operation);
+    ReadFileRequest(const std::string& message);
 
     /**
      * @brief Retorna a mensagem sendo compartilhada entre as instancias.
@@ -55,33 +44,7 @@ public:
     /**
      * @brief Sobrecarga do operador igual.
      */
-    bool operator==(const Request& other) const;
-
-    /**
-     * @brief Sobrecarga do operador <<, convert the object to a string representation
-     */
-    friend std::ostream& operator<<(std::ostream& os, const Request& obj);
-};
-
-/**
- * @brief Classe que representa uma solicitação de leitura de algumn arquivo.
- */
-class ReadFileRequest : public Request {
-private:
-    /**
-     * @brief 
-     */
-    fs::path m_filename;
-public:
-    /**
-     * @brief Construtor da classe.
-     */
-    ReadFileRequest(fs::path filename);
-
-    /**
-     * @brief Retorna o arquivo que deve ser aberto
-     */
-    const fs::path& getFilename() const;
+    bool operator==(const ReadFileRequest& other) const;
 };
 
 /**
@@ -100,9 +63,9 @@ struct CommunicationData {
     boost::interprocess::interprocess_condition m_condition;
 
     /**
-     * @brief Solicitação.
+     * @brief Mensagem sendo compartilhada entre as instancias.
      */
-    Request m_request;
+    std::array<char, MESSAGE_SIZE> m_message = {};
 
     /**
      * @brief Indica se a instância principal (servidor) está disponível.
@@ -147,7 +110,7 @@ private:
     /**
      * @brief Representação da tarefa que está sendo passada para o servidor.
      */
-    Request m_request;
+    ReadFileRequest m_request;
 
     /**
      * @brief Indica se a instância principal (servidor) está disponível.
@@ -184,7 +147,7 @@ public:
     /**
      * @brief
      */
-    const Request& getRequest() const;
+    ReadFileRequest getRequest();
 
     /**
      * @brief Define a se a execução deve ser cancelada.
@@ -216,11 +179,11 @@ public:
     /**
      * @brief Executa a instância secundária (cliente).
      *
-     * @param request Solicitação que vai ser feita ao servidor.
+     * @param filename Nome do arquivo de comunicação.
      *
      * @return true se a execução foi bem-sucedida, false caso contrário.
      */
-    bool runAsClient(const Request&request);
+    bool runAsClient(ReadFileRequest request);
 
     /**
      * @brief Destroi a conexão entre as instancias.
