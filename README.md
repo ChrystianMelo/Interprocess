@@ -3,6 +3,7 @@ This project demonstrates how to coordinate communication and synchronization be
 
 # Dependencies
 Boost C++ Library (interprocess module)
+Documentation for synchronization mechanisms: [Boost Interprocess - Synchronization Mechanisms](https://www.boost.org/doc/libs/1_47_0/doc/html/interprocess/synchronization_mechanisms.html#interprocess.synchronization_mechanisms.conditions)
 
 # Functionality
 The project includes the following components:
