@@ -18,7 +18,7 @@
     <ClCompile Include="Main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="CommunicationUtils.cpp">
+    <ClCompile Include="InstanceCommunication.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -26,7 +26,7 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="CommunicationUtils.h">
+    <ClInclude Include="InstanceCommunication.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
